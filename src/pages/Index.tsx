@@ -20,7 +20,7 @@ interface Lesson {
   id: string;
   title: string;
   emoji: string;
-  words: string[];
+  words: { english: string; russian: string }[];
   completed: boolean;
 }
 
@@ -41,28 +41,48 @@ export default function Index() {
       id: '1',
       title: 'Животные',
       emoji: '🐶',
-      words: ['Cat - Кот', 'Dog - Собака', 'Bird - Птица', 'Fish - Рыба'],
+      words: [
+        { english: 'Cat', russian: 'Кот' },
+        { english: 'Dog', russian: 'Собака' },
+        { english: 'Bird', russian: 'Птица' },
+        { english: 'Fish', russian: 'Рыба' }
+      ],
       completed: true
     },
     {
       id: '2',
       title: 'Цвета',
       emoji: '🎨',
-      words: ['Red - Красный', 'Blue - Синий', 'Green - Зелёный', 'Yellow - Жёлтый'],
+      words: [
+        { english: 'Red', russian: 'Красный' },
+        { english: 'Blue', russian: 'Синий' },
+        { english: 'Green', russian: 'Зелёный' },
+        { english: 'Yellow', russian: 'Жёлтый' }
+      ],
       completed: true
     },
     {
       id: '3',
       title: 'Числа',
       emoji: '🔢',
-      words: ['One - Один', 'Two - Два', 'Three - Три', 'Four - Четыре'],
+      words: [
+        { english: 'One', russian: 'Один' },
+        { english: 'Two', russian: 'Два' },
+        { english: 'Three', russian: 'Три' },
+        { english: 'Four', russian: 'Четыре' }
+      ],
       completed: false
     },
     {
       id: '4',
       title: 'Семья',
       emoji: '👨‍👩‍👧',
-      words: ['Mom - Мама', 'Dad - Папа', 'Sister - Сестра', 'Brother - Брат'],
+      words: [
+        { english: 'Mom', russian: 'Мама' },
+        { english: 'Dad', russian: 'Папа' },
+        { english: 'Sister', russian: 'Сестра' },
+        { english: 'Brother', russian: 'Брат' }
+      ],
       completed: false
     }
   ]);
@@ -103,6 +123,10 @@ export default function Index() {
 
   const scanBrightness = () => {
     if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) {
+      toast.error('Камера ещё загружается, подождите немного');
+      return;
+    }
     
     setIsScanning(true);
     const canvas = canvasRef.current;
@@ -134,6 +158,17 @@ export default function Index() {
     }
 
     setTimeout(() => setIsScanning(false), 1000);
+  };
+
+  const speakWord = (text: string) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.8;
+      speechSynthesis.speak(utterance);
+    } else {
+      toast.error('Озвучка не поддерживается в этом браузере');
+    }
   };
 
   useEffect(() => {
@@ -268,22 +303,40 @@ export default function Index() {
               )}
             </div>
 
-            {cameraActive && brightness > 0 && (
-              <div className="space-y-2 animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Яркость:</span>
-                  <Badge variant={brightness > 70 ? 'default' : 'secondary'}>
-                    {brightness}%
-                  </Badge>
-                </div>
-                <Progress value={brightness} className="h-3" />
-                <p className="text-xs text-gray-500 text-center">
-                  {brightness > 70 ? '☀️ Отлично! Это окно!' : 
-                   brightness > 40 ? '🌤️ Неплохо' : 
-                   '🌙 Слишком темно'}
-                </p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-4 bg-gray-100 rounded-xl">
+                <span className="text-sm font-medium">Текущая яркость:</span>
+                <Badge 
+                  variant={brightness > 50 ? 'default' : 'secondary'}
+                  className={brightness > 50 ? 'bg-green-500 text-lg px-4 py-1' : 'text-lg px-4 py-1'}
+                >
+                  {brightness}%
+                </Badge>
               </div>
-            )}
+
+              {cameraActive && brightness > 0 && (
+                <div className="space-y-2 animate-fade-in">
+                  <Progress value={brightness} className="h-3" />
+                  <p className="text-xs text-gray-500 text-center">
+                    {brightness > 70 ? '☀️ Отлично! Это окно!' : 
+                     brightness > 40 ? '🌤️ Неплохо' : 
+                     '🌙 Слишком темно'}
+                  </p>
+                </div>
+              )}
+
+              {brightness > 50 && (
+                <div className="p-4 bg-green-100 border-2 border-green-500 rounded-xl animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 bg-green-500 rounded-full animate-ping"></div>
+                    <div className="w-4 h-4 bg-green-500 rounded-full absolute"></div>
+                    <p className="font-bold text-green-900 ml-4">
+                      🚨 СИГНАЛ! Яркость превышает 50%!
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="flex gap-2">
               {!cameraActive ? (
@@ -378,12 +431,25 @@ export default function Index() {
                   {lesson.words.map((word, i) => (
                     <div 
                       key={i} 
-                      className="flex items-center gap-2 p-2 bg-purple-50 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
                     >
-                      <div className="w-6 h-6 rounded-full bg-purple-200 flex items-center justify-center text-xs font-bold text-purple-600">
-                        {i + 1}
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-purple-200 flex items-center justify-center text-xs font-bold text-purple-600">
+                          {i + 1}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-purple-900">{word.english}</p>
+                          <p className="text-xs text-purple-600">{word.russian}</p>
+                        </div>
                       </div>
-                      <span className="text-sm font-medium">{word}</span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => speakWord(word.english)}
+                        className="h-8 w-8 p-0 hover:bg-purple-200"
+                      >
+                        <Icon name="Volume2" size={18} className="text-purple-600" />
+                      </Button>
                     </div>
                   ))}
                 </div>
