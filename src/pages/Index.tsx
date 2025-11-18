@@ -31,6 +31,7 @@ export default function Index() {
   const [cameraActive, setCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   const [childName, setChildName] = useState('Маша');
   const [childAge] = useState(7);
@@ -103,8 +104,11 @@ export default function Index() {
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        setCameraActive(true);
-        toast.success('Камера включена!');
+        videoRef.current.onloadedmetadata = () => {
+          setCameraActive(true);
+          startAutoScan();
+          toast.success('Камера включена! Автоматическое сканирование началось');
+        };
       }
     } catch (error) {
       toast.error('Не удалось получить доступ к камере');
@@ -112,23 +116,21 @@ export default function Index() {
   };
 
   const stopCamera = () => {
+    stopAutoScan();
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
       videoRef.current.srcObject = null;
       setCameraActive(false);
       setIsScanning(false);
+      setBrightness(0);
     }
   };
 
   const scanBrightness = () => {
     if (!videoRef.current || !canvasRef.current) return;
-    if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) {
-      toast.error('Камера ещё загружается, подождите немного');
-      return;
-    }
+    if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) return;
     
-    setIsScanning(true);
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
     if (!context) return;
@@ -148,16 +150,20 @@ export default function Index() {
 
     const avgBrightness = Math.round((sum / (data.length / 4) / 255) * 100);
     setBrightness(avgBrightness);
+  };
 
-    if (avgBrightness > 70) {
-      toast.success('Отлично! Это окно - много света! ☀️');
-    } else if (avgBrightness > 40) {
-      toast('Неплохо, но можно светлее');
-    } else {
-      toast.error('Слишком темно для окна');
+  const startAutoScan = () => {
+    if (scanIntervalRef.current) return;
+    scanIntervalRef.current = setInterval(() => {
+      scanBrightness();
+    }, 1000);
+  };
+
+  const stopAutoScan = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
     }
-
-    setTimeout(() => setIsScanning(false), 1000);
   };
 
   const speakWord = (text: string) => {
@@ -174,8 +180,15 @@ export default function Index() {
   useEffect(() => {
     return () => {
       stopCamera();
+      stopAutoScan();
     };
   }, []);
+
+  useEffect(() => {
+    if (currentScreen !== 'camera') {
+      stopCamera();
+    }
+  }, [currentScreen]);
 
   const completeLesson = (lessonId: string) => {
     setTotalStars(prev => prev + 5);
@@ -348,22 +361,14 @@ export default function Index() {
                   Включить камеру
                 </Button>
               ) : (
-                <>
-                  <Button 
-                    onClick={scanBrightness}
-                    disabled={isScanning}
-                    className="flex-1 bg-green-500 hover:bg-green-600"
-                  >
-                    <Icon name="Scan" size={20} className="mr-2" />
-                    {isScanning ? 'Сканирую...' : 'Сканировать'}
-                  </Button>
-                  <Button 
-                    onClick={stopCamera}
-                    variant="destructive"
-                  >
-                    <Icon name="X" size={20} />
-                  </Button>
-                </>
+                <Button 
+                  onClick={stopCamera}
+                  variant="destructive"
+                  className="flex-1"
+                >
+                  <Icon name="X" size={20} className="mr-2" />
+                  Выключить камеру
+                </Button>
               )}
             </div>
           </CardContent>
@@ -376,7 +381,7 @@ export default function Index() {
               <div>
                 <p className="font-medium text-blue-900">Подсказка</p>
                 <p className="text-sm text-blue-700">
-                  Наведи камеру на окно. Если яркость больше 70%, значит это действительно окно с хорошим освещением!
+                  Яркость определяется автоматически каждую секунду. Если больше 50% - загорается сигнал!
                 </p>
               </div>
             </div>
